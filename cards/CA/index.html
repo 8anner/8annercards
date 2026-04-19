@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>卡牌维基 · 悬浮预览</title>
+  <style>
+    /* 基础风格 —— 干净、类似维基百科，但重点是悬浮效果 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+    }
+
+    body {
+      background: #f6f6f6;
+      font-family: 'Segoe UI', 'Lucida Grande', 'Arial', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 20px;
+    }
+
+    .wiki-card {
+      max-width: 780px;
+      width: 100%;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+      padding: 30px 32px 40px;
+      border: 1px solid #e0e0e0;
+    }
+
+    h1 {
+      font-weight: 500;
+      font-size: 2.2rem;
+      letter-spacing: -0.01em;
+      border-bottom: 2px solid #d0d7de;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+      color: #1e1e1e;
+    }
+
+    h2 {
+      font-weight: 500;
+      font-size: 1.5rem;
+      margin: 28px 0 14px;
+      color: #2c3e50;
+    }
+
+    p {
+      line-height: 1.6;
+      color: #2c3e50;
+      margin-bottom: 1.2rem;
+    }
+
+    /* 卡牌清单——类似维基的条目样式 */
+    .card-list {
+      background: #fafbfc;
+      border-radius: 14px;
+      padding: 16px 20px;
+      border: 1px solid #e9ecef;
+      margin: 22px 0 16px;
+    }
+
+    .card-item {
+      padding: 6px 0;
+      border-bottom: 1px dashed #dee2e6;
+      display: flex;
+      align-items: baseline;
+    }
+
+    .card-item:last-child {
+      border-bottom: none;
+    }
+
+    .card-id {
+      font-weight: 600;
+      min-width: 110px;
+      color: #0969da;
+    }
+
+    /* ⭐ 关键：卡牌悬浮链接 —— 自带预览 */
+    .card-preview-link {
+      position: relative;
+      display: inline-block;
+      color: #0b5e9e;
+      text-decoration: none;
+      font-weight: 500;
+      border-bottom: 1px dotted #80b5e0;
+      cursor: help;  /* 暗示悬浮有内容 */
+    }
+
+    .card-preview-link:hover {
+      color: #004182;
+      border-bottom-color: #004182;
+    }
+
+    /* 预览卡片 —— 悬浮时才出现，使用绝对定位 + 延迟显示，优雅 */
+    .card-preview-link .preview-popup {
+      position: absolute;
+      bottom: 150%;           /* 向上弹出，不遮挡下方文字 */
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 35px rgba(0, 0, 0, 0.2), 0 6px 12px rgba(0, 0, 0, 0.1);
+      padding: 12px 12px 10px;
+      border: 1px solid #cfdde9;
+      z-index: 1000;
+      white-space: nowrap;     /* 防止换行，图片宽度决定尺寸 */
+      
+      /* 隐藏与动画 */
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.18s ease, visibility 0.18s;
+      pointer-events: none;    /* 让鼠标事件穿透，避免干扰悬浮 */
+      
+      /* 小三角箭头 (指向链接) */
+      &::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 8px;
+        border-style: solid;
+        border-color: #ffffff transparent transparent transparent;
+        filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.02));
+      }
+      
+      /* 增加一个边框三角装饰，与popup边框融合 */
+      &::before {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 9px;
+        border-style: solid;
+        border-color: #cfdde9 transparent transparent transparent;
+        margin-top: 1px;
+      }
+    }
+
+    /* 悬停时显示预览 */
+    .card-preview-link:hover .preview-popup {
+      opacity: 1;
+      visibility: visible;
+      transition-delay: 0.1s;   /* 轻微延迟，避免误触 */
+    }
+
+    /* 卡牌图片样式 */
+    .card-image {
+      display: block;
+      max-width: 220px;          /* 控制预览尺寸，可根据需要调整 */
+      width: auto;
+      height: auto;
+      border-radius: 10px;
+      background: #f1f5f9;
+      border: 1px solid #d7e1ea;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.02);
+      transition: transform 0.15s;
+    }
+
+    /* 预览框内也可以加一个卡牌编号/标题，更清晰 */
+    .preview-caption {
+      text-align: center;
+      margin-top: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #2f5b7c;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    /* 为了演示图片占位 —— 使用emoji或SVG模拟“照片”效果。 
+       您只需要将图片路径替换成真正的照片路径即可。
+       这里用base64生成的简约风格卡牌图案，因为“我已经弄好了所有卡牌的照片”，
+       为了让预览直观，示例采用内联SVG/DataURI模拟真实卡牌画面，
+       您替换成 `<img src="你的图片/CA-001.jpg" ...>` 即可 */
+    
+    /* 附加说明：真实照片直接改src即可。 */
+    .note {
+      margin-top: 28px;
+      background: #eef5fa;
+      padding: 14px 18px;
+      border-radius: 12px;
+      color: #1a445b;
+      border-left: 4px solid #2a7faa;
+      font-size: 0.95rem;
+    }
+
+    .note code {
+      background: #d9e6f2;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+    }
+
+    .demo-hint {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+
+    /* 另一个例子，用列表展示链接 */
+    .example-block {
+      margin: 30px 0 10px;
+    }
+
+    hr {
+      margin: 20px 0;
+      border: none;
+      border-top: 1px solid #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+<div class="wiki-card">
+  <h1>📇 卡牌档案馆 · 悬浮预览</h1>
+  <p>鼠标悬停在任何带下划虚线的卡牌编号上，即可查看卡牌照片。<br>
+  下方为示例链接，包含您提到的 <strong>CA-001</strong> 及其他卡牌。</p>
+
+  <!-- 卡牌列表区 (类似维基条目) -->
+  <div class="card-list">
+    <div class="card-item">
+      <span class="card-id">基础包 #001</span>
+      <!-- 悬浮预览链接 —— CA-001 -->
+      <span class="card-preview-link">
+        CA-001 · 龙骑士
+        <span class="preview-popup">
+          <!-- 真实的卡牌照片：请将 src 替换为您的实际图片路径。
+               这里用内嵌矢量图+文字模拟卡面，便于演示效果。
+               替换指引：直接改成 <img class="card-image" src="你的照片/CA-001.png" alt="CA-001"> -->
+          <img class="card-image" 
+               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='300' viewBox='0 0 220 300'%3E%3Crect width='220' height='300' rx='14' fill='%23223a5e'/%3E%3Crect x='8' y='8' width='204' height='284' rx='10' fill='%23f5efe2'/%3E%3Crect x='16' y='16' width='188' height='190' rx='8' fill='%23b22234'/%3E%3Ctext x='30' y='55' font-family='Georgia,serif' font-size='22' fill='%23f5d742' font-weight='bold'%3E🐉 龙骑士%3C/text%3E%3Ctext x='30' y='100' font-family='Arial' font-size='16' fill='%23f0e6d2'%3E力量: 9%3C/text%3E%3Ctext x='30' y='130' font-family='Arial' font-size='16' fill='%23f0e6d2'%3E防御: 7%3C/text%3E%3Ccircle cx='110' cy='210' r='28' fill='%23f5d742' opacity='0.3'/%3E%3Ctext x='90' y='218' font-family='Arial' font-size='28' fill='%23e63946' font-weight='bold'%3E🔥%3C/text%3E%3Ctext x='50' y='270' font-family='monospace' font-size='12' fill='%233d5a80'%3E「炎龙之息」%3C/text%3E%3C/svg%3E"
+               alt="CA-001 卡牌预览 (示例矢量图)">
+          <div class="preview-caption">CA-001 · 龙骑士</div>
+        </span>
+      </span>
+      <span style="margin-left: 12px; color: #4a627a;">—— 火焰系 / 传说</span>
+    </div>
+
+    <div class="card-item">
+      <span class="card-id">基础包 #002</span>
+      <span class="card-preview-link">
+        CA-002 · 冰霜法师
+        <span class="preview-popup">
+          <!-- 同样，这里是模拟图。换成真实图片路径即可，例如 src="images/CA-002.jpg" -->
+          <img class="card-image" 
+               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='300' viewBox='0 0 220 300'%3E%3Crect width='220' height='300' rx='14' fill='%231b3b4f'/%3E%3Crect x='8' y='8' width='204' height='284' rx='10' fill='%23e6f0fa'/%3E%3Crect x='16' y='16' width='188' height='190' rx='8' fill='%23366b8c'/%3E%3Ctext x='25' y='60' font-family='Georgia' font-size='22' fill='%23c3e2f7' font-weight='bold'%3E❄️ 冰霜法师%3C/text%3E%3Ctext x='30' y='105' font-family='Arial' font-size='16' fill='%23ffffff'%3E智力: 10%3C/text%3E%3Ctext x='30' y='135' font-family='Arial' font-size='16' fill='%23ffffff'%3E寒冰屏障%3C/text%3E%3Ccircle cx='110' cy='215' r='25' fill='%23a1d2f0' opacity='0.5'/%3E%3Ctext x='88' y='225' font-size='30' fill='%23ffffff'%3E❄️%3C/text%3E%3Ctext x='40' y='270' font-family='monospace' font-size='12' fill='%231e3b4f'%3E「极寒领域」%3C/text%3E%3C/svg%3E"
+               alt="CA-002 卡牌预览">
+          <div class="preview-caption">CA-002 · 冰霜法师</div>
+        </span>
+      </span>
+      <span style="margin-left: 12px; color: #4a627a;">—— 冰霜 / 史诗</span>
+    </div>
+
+    <div class="card-item">
+      <span class="card-id">扩展包 #101</span>
+      <span class="card-preview-link">
+        CA-101 · 森林精灵
+        <span class="preview-popup">
+          <img class="card-image" 
+               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='300' viewBox='0 0 220 300'%3E%3Crect width='220' height='300' rx='14' fill='%232b4d2b'/%3E%3Crect x='8' y='8' width='204' height='284' rx='10' fill='%23e1f0da'/%3E%3Crect x='16' y='16' width='188' height='190' rx='8' fill='%23558b2f'/%3E%3Ctext x='30' y='60' font-family='Georgia' font-size='22' fill='%23f1f8e9' font-weight='bold'%3E🌿 森林精灵%3C/text%3E%3Ctext x='30' y='105' font-family='Arial' font-size='16' fill='%23ffffff'%3E敏捷: 8%3C/text%3E%3Ctext x='30' y='135' font-family='Arial' font-size='16' fill='%23ffffff'%3E自然治愈%3C/text%3E%3Ctext x='55' y='220' font-size='40' fill='%23cddc39'%3E🌱%3C/text%3E%3Ctext x='40' y='270' font-family='monospace' font-size='12' fill='%232e5c2e'%3E「林间祝福」%3C/text%3E%3C/svg%3E"
+               alt="CA-101 卡牌预览">
+          <div class="preview-caption">CA-101 · 森林精灵</div>
+        </span>
+      </span>
+      <span style="margin-left: 12px; color: #4a627a;">—— 自然 / 稀有</span>
+    </div>
+
+    <div class="card-item">
+      <span class="card-id">传奇 #007</span>
+      <span class="card-preview-link">
+        CA-007 · 暗影刺客
+        <span class="preview-popup">
+          <img class="card-image" 
+               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='300' viewBox='0 0 220 300'%3E%3Crect width='220' height='300' rx='14' fill='%231a1a2e'/%3E%3Crect x='8' y='8' width='204' height='284' rx='10' fill='%2325253a'/%3E%3Crect x='16' y='16' width='188' height='190' rx='8' fill='%2340406e'/%3E%3Ctext x='25' y='60' font-family='Georgia' font-size='22' fill='%23bfbfdf' font-weight='bold'%3E🗡️ 暗影刺客%3C/text%3E%3Ctext x='30' y='105' font-family='Arial' font-size='16' fill='%23ddddff'%3E灵巧: 11%3C/text%3E%3Ctext x='30' y='135' font-family='Arial' font-size='16' fill='%23ddddff'%3E潜行·致命%3C/text%3E%3Ctext x='70' y='220' font-size='36' fill='%23b0b0d0'%3E⚔️%3C/text%3E%3Ctext x='40' y='270' font-family='monospace' font-size='12' fill='%23aaaacc'%3E「夜幕突袭」%3C/text%3E%3C/svg%3E"
+               alt="CA-007 卡牌预览">
+          <div class="preview-caption">CA-007 · 暗影刺客</div>
+        </span>
+      </span>
+      <span style="margin-left: 12px; color: #4a627a;">—— 暗影 / 传说</span>
+    </div>
+  </div>
+
+  <!-- 另一个展示：独立超链接，就像维基内文中的链接一样 -->
+  <p style="margin-top: 24px;">
+    例如在描述中提及卡牌 
+    <span class="card-preview-link">CA-001
+      <span class="preview-popup">
+        <img class="card-image" 
+             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='300' viewBox='0 0 220 300'%3E%3Crect width='220' height='300' rx='14' fill='%23223a5e'/%3E%3Crect x='8' y='8' width='204' height='284' rx='10' fill='%23f5efe2'/%3E%3Crect x='16' y='16' width='188' height='190' rx='8' fill='%23b22234'/%3E%3Ctext x='30' y='55' font-family='Georgia,serif' font-size='22' fill='%23f5d742' font-weight='bold'%3E🐉 龙骑士%3C/text%3E%3Ctext x='30' y='100' font-family='Arial' font-size='16' fill='%23f0e6d2'%3E力量: 9%3C/text%3E%3Ctext x='30' y='130' font-family='Arial' font-size='16' fill='%23f0e6d2'%3E防御: 7%3C/text%3E%3Ccircle cx='110' cy='210' r='28' fill='%23f5d742' opacity='0.3'/%3E%3Ctext x='90' y='218' font-family='Arial' font-size='28' fill='%23e63946' font-weight='bold'%3E🔥%3C/text%3E%3Ctext x='50' y='270' font-family='monospace' font-size='12' fill='%233d5a80'%3E「炎龙之息」%3C/text%3E%3C/svg%3E"
+             alt="CA-001">
+        <div class="preview-caption">CA-001</div>
+      </span>
+    </span> 
+    是一张强力火属性卡牌，而 
+    <span class="card-preview-link">CA-002
+      <span class="preview-popup">
+        <img class="card-image" 
+             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='300' viewBox='0 0 220 300'%3E%3Crect width='220' height='300' rx='14' fill='%231b3b4f'/%3E%3Crect x='8' y='8' width='204' height='284' rx='10' fill='%23e6f0fa'/%3E%3Crect x='16' y='16' width='188' height='190' rx='8' fill='%23366b8c'/%3E%3Ctext x='25' y='60' font-family='Georgia' font-size='22' fill='%23c3e2f7' font-weight='bold'%3E❄️ 冰霜法师%3C/text%3E%3Ctext x='30' y='105' font-family='Arial' font-size='16' fill='%23ffffff'%3E智力: 10%3C/text%3E%3Ctext x='30' y='135' font-family='Arial' font-size='16' fill='%23ffffff'%3E寒冰屏障%3C/text%3E%3Ccircle cx='110' cy='215' r='25' fill='%23a1d2f0' opacity='0.5'/%3E%3Ctext x='88' y='225' font-size='30' fill='%23ffffff'%3E❄️%3C/text%3E%3Ctext x='40' y='270' font-family='monospace' font-size='12' fill='%231e3b4f'%3E「极寒领域」%3C/text%3E%3C/svg%3E"
+             alt="CA-002">
+        <div class="preview-caption">CA-002</div>
+      </span>
+    </span> 
+    则能冻结对手。悬浮到编号上即可预览卡面。
+  </p>
+
+  <hr>
+
+  <!-- 简明指引：替换照片 -->
+  <div class="note">
+    <strong>🔧 替换您的真实卡牌照片</strong><br>
+    将每个 <code>&lt;img class="card-image" src="..."&gt;</code> 的 <code>src</code> 改为您自己的图片路径即可。<br>
+    例如：<code>src="images/CA-001.jpg"</code> 或 <code>src="cards/CA-001.webp"</code>。<br>
+    预览尺寸由 <code>.card-image</code> 的 <code>max-width</code> 控制（当前为220px，可自行调整）。<br>
+    示例中用的是内嵌SVG模拟卡图，完全可替换。
+  </div>
+
+  <!-- 展示额外的悬浮链接：您只需复制 .card-preview-link 结构 -->
+  <div style="margin-top: 24px; font-style: italic; color: #3c5a7d;">
+    <span>✨ 其他卡牌：</span>
+    <span class="card-preview-link">CA-101
+      <span class="preview-popup">
+        <img class="card-image" 
+             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='300' viewBox='0 0 220 300'%3E%3Crect width='220' height='300' rx='14' fill='%232b4d2b'/%3E%3Crect x='8' y='8' width='204' height='284' rx='10' fill='%23e1f0da'/%3E%3Crect x='16' y='16' width='188' height='190' rx='8' fill='%23558b2f'/%3E%3Ctext x='30' y='60' font-family='Georgia' font-size='22' fill='%23f1f8e9' font-weight='bold'%3E🌿 森林精灵%3C/text%3E%3Ctext x='30' y='105' font-family='Arial' font-size='16' fill='%23ffffff'%3E敏捷: 8%3C/text%3E%3Ctext x='30' y='135' font-family='Arial' font-size='16' fill='%23ffffff'%3E自然治愈%3C/text%3E%3Ctext x='55' y='220' font-size='40' fill='%23cddc39'%3E🌱%3C/text%3E%3Ctext x='40' y='270' font-family='monospace' font-size='12' fill='%232e5c2e'%3E「林间祝福」%3C/text%3E%3C/svg%3E"
+             alt="CA-101">
+        <div class="preview-caption">CA-101 · 森林精灵</div>
+      </span>
+    </span>
+    、
+    <span class="card-preview-link">CA-007
+      <span class="preview-popup">
+        <img class="card-image" 
+             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='300' viewBox='0 0 220 300'%3E%3Crect width='220' height='300' rx='14' fill='%231a1a2e'/%3E%3Crect x='8' y='8' width='204' height='284' rx='10' fill='%2325253a'/%3E%3Crect x='16' y='16' width='188' height='190' rx='8' fill='%2340406e'/%3E%3Ctext x='25' y='60' font-family='Georgia' font-size='22' fill='%23bfbfdf' font-weight='bold'%3E🗡️ 暗影刺客%3C/text%3E%3Ctext x='30' y='105' font-family='Arial' font-size='16' fill='%23ddddff'%3E灵巧: 11%3C/text%3E%3Ctext x='30' y='135' font-family='Arial' font-size='16' fill='%23ddddff'%3E潜行·致命%3C/text%3E%3Ctext x='70' y='220' font-size='36' fill='%23b0b0d0'%3E⚔️%3C/text%3E%3Ctext x='40' y='270' font-family='monospace' font-size='12' fill='%23aaaacc'%3E「夜幕突袭」%3C/text%3E%3C/svg%3E"
+             alt="CA-007">
+        <div class="preview-caption">CA-007 · 暗影刺客</div>
+      </span>
+    </span>
+    —— 悬浮试试。
+  </div>
+
+  <!-- 简单的复制说明：只需包裹一个带 preview-popup 的链接 -->
+  <div style="margin-top: 30px; background: #f3f8fc; border-radius: 14px; padding: 12px 20px;">
+    <p style="margin-bottom: 8px; font-weight: 600;">📋 如何用于您的卡牌维基：</p>
+    <p style="font-size: 0.95rem;">将 <code>&lt;span class="card-preview-link"&gt;卡牌编号&lt;span class="preview-popup"&gt;...&lt;/span&gt;&lt;/span&gt;</code> 结构嵌入任意文字中。悬浮即显示预览。图片路径改成您本地的照片即可。</p>
+  </div>
+</div>
+
+<!-- 附：悬浮效果已完全满足“鼠标悬浮于超链接上出现卡牌照片”。不需要额外JS。 -->
+</body>
+</html>

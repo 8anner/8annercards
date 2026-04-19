@@ -9,6 +9,8 @@
   
 [更新日志](./data)
 
+[卡牌总览](./cards)
+
 [github页](https://github.com/8anner/8annercards/)
 
 这或许是8anner一生的回合制卡牌驱动桌游设计经验。
